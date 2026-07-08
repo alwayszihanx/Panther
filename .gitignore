@@ -6,3 +6,40 @@ keys/
 
 *.aab
 *.apk
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+
+# C/C++
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.exe
+*.out
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+
+# Shell
+*.log
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/

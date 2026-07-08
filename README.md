@@ -1,101 +1,142 @@
-# Helium Browser for Android
+# Panther Browser for Android
 
 [![GitHub](https://img.shields.io/github/downloads/jqssun/android-helium-browser/total?label=GitHub&logo=GitHub)](https://github.com/jqssun/android-helium-browser/releases)
 [![license](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/jqssun/android-helium-browser/blob/main/LICENSE)
 [![build](https://img.shields.io/github/actions/workflow/status/jqssun/android-helium-browser/build.yml)](https://github.com/jqssun/android-helium-browser/actions/workflows/build.yml)
 [![release](https://img.shields.io/github/v/release/jqssun/android-helium-browser)](https://github.com/jqssun/android-helium-browser/releases)
 
-A fully open-source experimental Chromium-based web browser for Android with extensions support, based on
+<img alt="Panther Browser logo" src="res/logo.svg" width="160" />
+
+A fully open-source, experimental Chromium-based web browser for Android with full
+extensions support, built on top of:
+
 - [Vanadium](https://github.com/GrapheneOS/Vanadium) by [GrapheneOS](https://github.com/GrapheneOS)
-- [Helium](https://github.com/imputnet/helium) by [imput](https://github.com/imputnet) (future patches pending GPLv2 compatibility)
+- [Helium](https://github.com/imputnet/helium) by [imput](https://github.com/imputnet) (downstream patches pending GPLv2 compatibility)
 
-[<img height="48" alt="Get it on GitHub" src="https://jqssun.github.io/images/badges/github.svg">](https://github.com/jqssun/android-helium-browser/releases/latest)
+Application id: `io.alwayszihan.panther`
 
-<img alt="Helium Browser for Android" src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.png" />
+## Branding
 
-## Usage
+- **Main app logo** — `res/logo.svg`. It is rasterized into every launcher icon density
+  during the build (`res/icon.sh`), replacing the previous Vanadium/Helium-style icon.
+- **Alternative logos** — `res/logo-2.svg` … `res/logo-10.svg`. These are the selectable
+  app icons offered in the in-app **customization settings** (change app icon).
+- **Themed icon** — `res/drawable/themed_app_icon.xml` is the monochrome vector used when
+  Android "themed icons" are enabled.
+- **Store assets** — `fastlane/.../images/icon.png` and `featureGraphic.png` are regenerated
+  from `res/logo.svg` on every build.
 
-### Installing Extensions
+## Features & Settings
 
-Navigate to [Chrome Web Store](https://chromewebstore.google.com/), enable **Desktop site** by selecting the menu button <kbd>⋮</kbd> in the top right corner and ensure the option is checked. Select **Okay** and proceed as normal if prompted with:
-> The Chrome Web Store is only available on desktop.
+All of the following are applied automatically by `patch.sh` at build time.
 
-Manifest V2 (MV2) extensions are supported. You can install [uBlock Origin from Chrome Web Store](https://chromewebstore.google.com/detail/ublock-origin/cjpalhdlnbpafiamejdnhcphjbkeiagm).
- 
-Once you select **Add to Chrome**, [the extension will be installed in the background](https://support.google.com/chrome_webstore/answer/2664769) until the button changes to **Remove from Chrome**.
+### Branding & identity
+- App name set to **Panther** (overrides Chrome / Helium / Vanadium strings).
+- Package name `io.alwayszihan.panther`.
+- Custom launcher icon + themed icon generated from `res/logo.svg`.
 
-### Using Extensions
+### Extensions
+- **Manifest V2 (MV2)** extensions are supported and not deprecated (`kExtensionManifestV2Unsupported`
+  and `kExtensionManifestV2Disabled` disabled, MV2 testing allowed, Web Store MV2 deprecation set to `kNone`).
+- `browser_action` / `page_action` API sources re-added so legacy MV2 extensions load.
+- **Extensions toolbar** — a dedicated toolbar container + menu button is injected
+  (`toolbar_phone.xml` ViewStub, `ToolbarTablet` cast removed, popup drawing wired).
+- **Pin to toolbar** — extension popups can be pinned; the extensions menu button is hidden
+  unless pinned.
+- **Incognito (OTR) support for extensions** — `process_manager` forced and
+  `shouldOpenIncognitoAsWindow()` returns `true`.
+- **Extension priority** — extension host processes are marked `IMPORTANT`.
+- **Install prompt fix** — permission prompts anchor to the correct parent window.
+- **Bundled uBlock Origin** — force-installed from `extensions/ublock-origin/src` when present
+  (ad / tracker / cookie / script blocking).
 
-To use [an extension's popup](https://developer.chrome.com/docs/extensions/develop/ui/add-popup), open extensions menu, select the menu button <kbd>⋮</kbd> next to the extension, and choose **Pin to toolbar** from the list. You can then open the popup using the extension's dedicated toolbar icon. 
+### Privacy & security
+- **Fingerprinting protection enabled by default** (`kFingerprintingProtection` and
+  `kFingerprintingProtectionForFeatures`).
+- **WebRTC IP handling policy** available under *Settings › Privacy and security › WebRTC IP handling policy*.
+- All [Vanadium](https://github.com/GrapheneOS/Vanadium) hardening patches are applied by default.
+- Google API keys are stripped (`google_api_key` / `google_default_client_id` / secret set to `x`).
 
-To run an extension in Incognito (OTR) mode, go to **Manage extensions**, find the extension you want to use in Incognito mode, select **Details**, and turn on **Allow in Incognito**.
+### Media & playback
+- **Background play** — media keeps playing when the app is backgrounded
+  (`MediaSessionImpl::OnSuspend` returns early for `kSystem` suspend).
+- Proprietary codecs enabled (`ffmpeg_branding = "Chrome"`, `proprietary_codecs = true`,
+  AV1 decoder enabled).
 
-### Debug URLs
+### UI / UX
+- **Bottom address bar** (crbug.com/40831291 fix).
+- **Developer menu & tools enabled** — `kSubmenusInAppMenu`, `kTaskManagerClank`,
+  `kAndroidDevToolsFrontend`; developer entry always shown in the context menu and the
+  overflow menu.
+- **Site search** in Omnibox enabled (`kOmniboxSiteSearch`).
+- **Custom search engines** — 32 privacy-friendly search engines (DuckDuckGo Lite,
+  Brave, Startpage, Kagi, SearXNG, Mojeek, Wikiless, etc.) are prepended to
+  Chromium's prepopulated list (`res/add_search_engines.py`), and **DuckDuckGo
+  Lite (no-AI)** is set as the default search provider for every country.
+- **Default homepage** set to `https://www.google.com` (New Tab Page homepage disabled).
+- **Downloads from other apps** — handles the `VIEW_DOWNLOADS` intent.
+- **Extension popup / card viewport fixes** — minimum popup size raised to `256×25`,
+  responsive card and toolbar widths for the extensions page.
+- **Overscroll** fix (crbug.com/525294822) on older Chromium versions.
+- **Incognito UAF fixes** (crbug.com/431004500, crbug.com/40274462) via
+  `HasLiveWebContentsForBrowserContext`.
+- **API 31 profile** — `MIXED` profile type supported.
 
-To view and access the debug URLs, use [`chrome://chrome-urls`](chrome://chrome-urls). For **Experiments**, use [`chrome://flags`](chrome://flags).
+### Graphics
+- Vulkan / ANGLE passthrough disabled in favor of a stable software/GL fallback
+  (`kSkipVulkanBlocklist`, `kDefaultANGLEVulkan`, `kVulkanFromANGLE`,
+  `kDefaultPassthroughCommandDecoder` removed; `kFallbackToSWIfGLES3NotSupported` disabled).
 
-### WebRTC IP Policy
+## Build configuration (`args.gn`)
 
-Consistent with both Helium and Vanadium, the option is available by selecting the menu button <kbd>⋮</kbd> in the top right corner, then **Settings**, **Privacy and security**, then under **Privacy**, **WebRTC IP handling policy**. If you experience issues with WebRTC due to the IPs being shielded by default (e.g. [Discord Voice](https://discord.com/blog/how-discord-handles-two-and-half-million-concurrent-voice-users-using-webrtc)), you may try to change it to **Default public interface only**, or **Default**.
-
-## Implementation
-
-> [!WARNING]
-> All builds are experimental, so unexpected issues may occur. [Helium Browser for Android](#helium-browser-for-android) only attempts to improve security and privacy where possible. For better protection on Android, you should instead use [GrapheneOS](https://grapheneos.org) with [Vanadium](https://vanadium.app), which additionally integrates patches into Android System WebView and provides significant kernel and memory management hardening on the OS level.
-
-```mermaid
----
-config:
-  layout: dagre
----
-flowchart TD
- subgraph s1["Helium"]
-        n5["Generic Patches<small><br>patches/series</small>"]
-        n6["Name Substitution<small><br>utils/name_substitution.py</small>"]
-        n7["Version Patch<small><br>{*version,revision}.txt</small>"]
-        n8["Resource Patch<small><br>resources/*resources.txt</small>"]
-  end
- subgraph s2["Vanadium"]
-        n9["Generic Patches<small><br>patches/*.patch</small>"]
-  end
- subgraph s3["Helium Browser for Android"]
-        n11["GN Build Configuration<small><br>args.gn</small>"]
-        n12["Signed Release"]
-  end
-    n1["Chromium"] --> s1 & s2
-    n5 --> n6
-    n6 --> n7
-    n7 --> n8
-    s1 --> s3
-    s2 --> s3
-    n11 --> n12
-    n5@{ shape: subproc}
-    n6@{ shape: subproc}
-    n7@{ shape: subproc}
-    n8@{ shape: subproc}
-    n9@{ shape: subproc}
-    n11@{ shape: subproc}
-    n12@{ shape: subproc}
-    n1@{ shape: rounded}
-    classDef Aqua stroke-width:1px, stroke-dasharray:none, stroke:#46EDC8, fill:#DEFFF8, color:#378E7A
-    style n5 stroke:#FF6D00
-    style n8 stroke:#FF6D00
-```
-
-All [Vanadium](https://github.com/GrapheneOS/Vanadium) patches are applied by default. While the full build aims to be consistent with [Helium](https://github.com/imputnet/helium-linux), downstream implementation of Helium patches is currently paused to ensure strict compliance with upstream licensing requirements. The diagram reflects the architecture of initial ported releases and serves as the target framework if resolution is achieved.
+| Option | Value | Purpose |
+| --- | --- | --- |
+| `chrome_public_manifest_package` | `io.alwayszihan.panther` | Application id |
+| `is_desktop_android` | `true` | Desktop-class Android build |
+| `target_cpu` | `arm` / `arm64` | Both ABIs are produced |
+| `is_official_build` | `true` | Optimized release build |
+| `symbol_level` | `1` | Limited symbols for crash reports |
+| `proprietary_codecs` | `true` | H.264 / AAC etc. |
+| `ffmpeg_branding` | `Chrome` | Proprietary FFmpeg |
+| `enable_av1_decoder` / `enable_dav1d_decoder` | `true` | AV1 playback |
+| `use_login_database_as_backend` | `true` | Local login database |
+| `disable_fieldtrial_testing_config` | `true` | No field-trial config |
+| `google_api_key` / `client_id` / `secret` | `x` | Keys stripped |
 
 ## Building
 
-All releases are built using [Actions](https://github.com/features/actions). Current releases can also be attested using [GitHub CLI](https://github.com/cli/cli).
+All releases are produced with [GitHub Actions](https://github.com/features/actions) on a
+self-hosted runner (default) or `ubuntu-latest`. Builds are attested with
+[`actions/attest-build-provenance`](https://github.com/actions/attest-build-provenance).
 
 ```shell
 gh attestation verify *.apk -R jqssun/android-helium-browser
 ```
 
-This repository provides the build script to compile on the latest Ubuntu, and may also work with other Linux distributions.
+This repository ships the build scripts to compile on the latest Ubuntu (and likely other
+Linux distributions). The pipeline:
 
-To build these releases yourself via CI (e.g. GitHub Actions), fork this repository. Supply your `base64` encoded `keystore.jks` and `local.properties` (containing your `keyAlias`, `keyPassword` and `storePassword`) to [**Repository secrets**](https://github.com/jqssun/android-helium-browser/blob/main/.github/workflows/build.yml#L49-L50) under **Settings** > **Secrets and variables** > **Actions**. To generate a release, go to **Actions**, select **Build**, and select **Run workflow**. Under **Runner**, you can either use a GitHub-hosted runner by entering `ubuntu-latest`, or `self-hosted` for your own hardware.
+1. Checks out submodules (`vanadium`, `helium`).
+2. Fetches the matching Chromium tag from `chromium.googlesource.com`.
+3. Applies the (rebranded) Vanadium patches and runs `patch.sh`.
+4. Builds `chrome_public_apk` for `arm` and `arm64`, plus an `arm64` App Bundle (`.aab`).
+5. Signs the APKs/AAB with the repo keystore and publishes a GitHub release.
+
+To build via CI, fork the repository and supply your `base64`-encoded `keystore.jks`
+(`LOCAL_TEST_JKS`) and `local.properties` (`STORE_TEST_JKS`, containing `keyAlias`,
+`keyPassword`, `storePassword`) as **Repository secrets** under
+*Settings › Secrets and variables › Actions*. Then go to **Actions › Build › Run workflow**
+and choose the runner.
+
+Build artifacts:
+
+- `*-armeabi-v7a.apk`
+- `*-arm64-v8a.apk`
+- `*-arm64-v8a.aab`
 
 ## Credits
 
-This project would not have been possible without the huge community contributions from [Vanadium](https://github.com/GrapheneOS/Vanadium), [Helium](https://github.com/imputnet/helium), as well as [ungoogled-chromium](https://github.com/ungoogled-software/ungoogled-chromium) and various other upstream projects. All credit goes to the original authors and contributors. This project started around the same time as [Helium Browser for Linux](https://github.com/imputnet/helium-linux) but it is not officially affiliated with the upstream [Helium](https://github.com/imputnet/helium) project.
+This project would not have been possible without the huge community contributions from
+[Vanadium](https://github.com/GrapheneOS/Vanadium), [Helium](https://github.com/imputnet/helium),
+[ungoogled-chromium](https://github.com/ungoogled-software/ungoogled-chromium), and various
+other upstream projects. All credit goes to the original authors and contributors.

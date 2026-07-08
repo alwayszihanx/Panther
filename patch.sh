@@ -2,7 +2,7 @@
 
 mkdir -p chrome/android/java/res_helium_base
 cp $SCRIPT_DIR/res/drawable/themed_app_icon.xml chrome/android/java/res_helium_base/drawable/themed_app_icon.xml
-for icon in $(find chrome/android/java/res_helium_base -type f -name '*.png'); do convert $icon -fill navy -tint 36 $icon && $SCRIPT_DIR/res/icon.sh $icon; done
+for icon in $(find chrome/android/java/res_helium_base -type f -name '*.png'); do $SCRIPT_DIR/res/icon.sh $icon; done
 # sed -i 's|Google LLC|jqssun, Google LLC|' chrome/browser/ui/android/strings/android_chrome_strings.grd
 
 sed -i '/feature_overrides.EnableFeature(::features::kSkipVulkanBlocklist);/d' chrome/browser/chrome_browser_field_trials.cc
@@ -74,6 +74,11 @@ sed -i 's|view_android->GetWindowAndroid();|show_params->GetParentWindow();|' ch
 # tmp: config info
 sed -i 's|if (!_omit_dex) {|if (_is_base_module \&\& !_omit_dex) {|' build/config/android/rules.gni
 
+# app name
+perl -0pi -e 's/(<message name="app_name"[^>]*>\s*)\n\s*Chrome\s*\n\s*(<\/message>)/$1\n    Panther\n$2/' chrome/android/java/strings/android_chrome_strings.grd
+perl -0pi -e 's/(<message name="app_name"[^>]*>\s*)\n\s*Helium\s*\n\s*(<\/message>)/$1\n    Panther\n$2/' chrome/android/java/strings/android_chrome_strings.grd
+perl -0pi -e 's/(<message name="app_name"[^>]*>\s*)\n\s*Vanadium\s*\n\s*(<\/message>)/$1\n    Panther\n$2/' chrome/android/java/strings/android_chrome_strings.grd
+
 # tmp
 sed -i 's|if (!IncognitoUtils.shouldOpenIncognitoAsWindow() \|\| isIncognitoShowing()) {|if (true) {|' chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedAppMenuPropertiesDelegate.java
 sed -i 's/BASE_FEATURE(kAndroidSearchInSettings,"SearchInSettings", base::FEATURE_DISABLED_BY_DEFAULT);/BASE_FEATURE(kAndroidSearchInSettings,"SearchInSettings", base::FEATURE_ENABLED_BY_DEFAULT);/' chrome/browser/flags/android/chrome_feature_list.cc
@@ -106,5 +111,70 @@ if (content::WebContents::HasLiveWebContentsForBrowserContext(profile)) { return
 # crbug.com/444024982: api 31
 sed -i 's/|| mSupportedProfileType == SupportedProfileType.REGULAR) {/|| mSupportedProfileType == SupportedProfileType.REGULAR || mSupportedProfileType == SupportedProfileType.MIXED) {/' chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
 sed -i 's/|| mSupportedProfileType == SupportedProfileType.OFF_THE_RECORD) {/|| mSupportedProfileType == SupportedProfileType.OFF_THE_RECORD || mSupportedProfileType == SupportedProfileType.MIXED) {/' chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+
+# bundled uBlock Origin (ad / tracker / cookie / script blocking)
+UBO_SRC=$SCRIPT_DIR/extensions/ublock-origin/src
+if [ -d "$UBO_SRC" ]; then
+  UBO_DST=chrome/browser/resources/ublock_origin
+  rm -rf $UBO_DST && mkdir -p $UBO_DST
+  cp -r "$UBO_SRC/." $UBO_DST/
+
+  perl -0pi -e 's/(void ExtensionSystemImpl::LoadExtensions\(\)\s*\{)/$1\n  LoadBundledExtension("ublock_origin", "chrome\/browser\/resources\/ublock_origin");/' \
+    chrome/browser/extensions/extension_system_impl.cc
+
+  cat >> chrome/browser/extensions/extension_system_impl.cc <<'EOF'
+
+void ExtensionSystemImpl::LoadBundledExtension(const std::string& id,
+                                               const base::FilePath& path) {
+  if (!extensions_enabled())
+    return;
+  extension_service_->pending_extension_manager()->AddForForceInstall(
+      id, std::string(),
+      ExtensionManagement::kForceInstallFromWebstore,
+      mojom::ManifestLocation::kInternal,
+      Extension::NO_FLAGS);
+  extension_service_->LoadExtension(path,
+                                    mojom::ManifestLocation::kInternal,
+                                    Extension::NO_FLAGS,
+                                    base::OnceClosure());
+}
+EOF
+fi
+
+# background play: keep media running when the app is backgrounded
+perl -0pi -e 's/(MediaSessionImpl::OnSuspend\([^)]*\)\s*\{)/$1\n  if (suspend_type() == blink::mojom::MediaSessionSuspendType::kSystem) { \/\/ panther: allow background play\n    return;\n  }/' \
+  content/browser/media/session/media_session_impl.cc
+
+# fingerprint protection: enable by default
+perl -0pi -e 's/(BASE_FEATURE\(kFingerprintingProtection,\s*\n\s*"FingerprintingProtection",\s*\n\s*)base::FEATURE_DISABLED_BY_DEFAULT/${1}base::FEATURE_ENABLED_BY_DEFAULT/' \
+  components/privacy_sandbox/common/privacy_sandbox_features.cc
+perl -0pi -e 's/(BASE_FEATURE\(kFingerprintingProtectionForFeatures,\s*\n\s*"FingerprintingProtectionForFeatures",\s*\n\s*)base::FEATURE_DISABLED_BY_DEFAULT/${1}base::FEATURE_ENABLED_BY_DEFAULT/' \
+  components/privacy_sandbox/common/privacy_sandbox_features.cc
+
+# manage downloads from other apps: handle VIEW_DOWNLOADS intent
+if [ -f chrome/android/java/AndroidManifest.xml ]; then
+  sed -i 's|<action android:name="android.intent.action.MAIN" />|<action android:name="android.intent.action.MAIN" />\n    <action android:name="android.intent.action.VIEW_DOWNLOADS" />|' \
+    chrome/android/java/AndroidManifest.xml
+fi
+
+# default homepage
+perl -0pi -e 's/RegisterStringPref\(prefs::kHomePage,\s*std::string\(\)/RegisterStringPref(prefs::kHomePage, "https:\/\/www.google.com"/' \
+  chrome/browser/prefs/browser_prefs.cc
+perl -0pi -e 's/RegisterBooleanPref\(prefs::kHomePageIsNewTabPage,\s*true/RegisterBooleanPref(prefs::kHomePageIsNewTabPage, false/' \
+  chrome/browser/prefs/browser_prefs.cc
+
+# store listing assets (fastlane) generated from the main logo
+if [ -d "$SCRIPT_DIR/fastlane/metadata/android/en-US/images" ]; then
+  rsvg-convert -w 512 -h 512 "$SCRIPT_DIR/res/logo.svg" \
+    -o "$SCRIPT_DIR/fastlane/metadata/android/en-US/images/icon.png"
+  rsvg-convert -w 512 -h 512 "$SCRIPT_DIR/res/logo.svg" -o /tmp/logo512.png 2>/dev/null
+  convert -size 1024x500 xc:"#F4B400" /tmp/logo512.png -gravity center -composite \
+    "$SCRIPT_DIR/fastlane/metadata/android/en-US/images/featureGraphic.png" 2>/dev/null || true
+fi
+
+# custom search engines (prepopulated_engines.json + default per country)
+if [ -f "$SCRIPT_DIR/res/add_search_engines.py" ]; then
+  python3 "$SCRIPT_DIR/res/add_search_engines.py"
+fi
 
 export PATCHED=1
