@@ -1,0 +1,89 @@
+name: Build (Free Runner Optimized)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Free Disk Space
+        run: |
+          echo "===== BEFORE CLEANUP ====="
+          df -h
+
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /usr/share/swift
+
+          sudo apt-get clean
+          sudo apt-get autoremove -y
+
+          docker system prune -af || true
+
+          echo "===== AFTER CLEANUP ====="
+          df -h
+
+      - name: Update vanadium
+        run: |
+          cd vanadium
+          git fetch --tags
+          git checkout $(git tag | sort -V | tail -n1)
+          cd ..
+
+      - name: Prepare Environment
+        run: |
+          chmod +x *.sh
+          echo "unix_time=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Build
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          LOCAL_TEST_JKS: ${{ secrets.LOCAL_TEST_JKS }}
+          STORE_TEST_JKS: ${{ secrets.STORE_TEST_JKS }}
+        run: |
+          ./build.sh
+
+      - name: Rename Outputs
+        if: success()
+        run: |
+          VERSION=$(find chromium/src/out/release -name '*arm64-v8a.apk' | sed 's/.*\///;s/-arm64-v8a.apk$//')
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+          mv $(find chromium/src/out/release -name '*arm64-v8a.aab') "${VERSION}-${{ env.unix_time }}-arm64-v8a.aab"
+          mv $(find chromium/src/out/release -name '*arm64-v8a.apk') "${VERSION}-${{ env.unix_time }}-arm64-v8a.apk"
+          mv $(find chromium/src/out/release -name '*armeabi-v7a.apk') "${VERSION}-${{ env.unix_time }}-armeabi-v7a.apk"
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Panther
+          path: |
+            *.apk
+            *.aab
+
+      - name: Create Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: v${{ env.VERSION }}
+          name: v${{ env.VERSION }}
+          files: |
+            *.apk
+            *.aab
