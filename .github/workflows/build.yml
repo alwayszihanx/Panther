@@ -20,25 +20,29 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
 
-      - name: Update Vanadium
+      - name: Update vanadium
         run: |
-          cd Vanadium
+          cd vanadium
           git fetch --tags
           git checkout $(git tag | sort -V | tail -n1)
           cd ..
-          git add Vanadium
+
+          git add vanadium
+
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          if ! git diff --staged --quiet; then
-            git commit -m "update"
+
+          if ! git diff --cached --quiet; then
+            git commit -m "Update vanadium"
             git push
           fi
 
       - name: Prepare Environment
         run: |
           chmod +x *.sh
-          echo "unix_time=$(date +%s)" >> "$GITHUB_ENV"
+          echo "unix_time=$(date +%s)" >> $GITHUB_ENV
 
       - name: Build
         env:
@@ -50,17 +54,17 @@ jobs:
 
       - name: Rename Outputs
         run: |
-          VERSION=$(find chromium/src/out/release -name '*arm64-v8a.apk' | sed 's/.*\///;s/\-arm64-v8a.apk$//')
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          VERSION=$(find chromium/src/out/release -name '*arm64-v8a.apk' | sed 's/.*\///;s/-arm64-v8a.apk$//')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-          mv $(find chromium/src/out/release -name '*arm64-v8a.aab') "$VERSION-${{ env.unix_time }}-arm64-v8a.aab"
-          mv $(find chromium/src/out/release -name '*arm64-v8a.apk') "$VERSION-${{ env.unix_time }}-arm64-v8a.apk"
-          mv $(find chromium/src/out/release -name '*armeabi-v7a.apk') "$VERSION-${{ env.unix_time }}-armeabi-v7a.apk"
+          mv $(find chromium/src/out/release -name '*arm64-v8a.aab') "${VERSION}-${{ env.unix_time }}-arm64-v8a.aab"
+          mv $(find chromium/src/out/release -name '*arm64-v8a.apk') "${VERSION}-${{ env.unix_time }}-arm64-v8a.apk"
+          mv $(find chromium/src/out/release -name '*armeabi-v7a.apk') "${VERSION}-${{ env.unix_time }}-armeabi-v7a.apk"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Panther-Build
+          name: Panther
           path: |
             *.apk
             *.aab
@@ -69,17 +73,15 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: v${{ env.VERSION }}
           tag_name: v${{ env.VERSION }}
+          name: v${{ env.VERSION }}
           files: |
-            ${{ env.VERSION }}-${{ env.unix_time }}-arm64-v8a.aab
-            ${{ env.VERSION }}-${{ env.unix_time }}-arm64-v8a.apk
-            ${{ env.VERSION }}-${{ env.unix_time }}-armeabi-v7a.apk
+            *.apk
+            *.aab
 
       - name: Attest Build
         uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
-            ${{ env.VERSION }}-${{ env.unix_time }}-arm64-v8a.aab
-            ${{ env.VERSION }}-${{ env.unix_time }}-arm64-v8a.apk
-            ${{ env.VERSION }}-${{ env.unix_time }}-armeabi-v7a.apk
+            *.apk
+            *.aab
