@@ -106,15 +106,31 @@ All of the following are applied automatically by `patch.sh` at build time.
 ## Building
 
 All releases are produced with [GitHub Actions](https://github.com/features/actions) on a
-self-hosted runner (default) or `ubuntu-latest`. Builds are attested with
+**GitHub-hosted Larger Runner** (no self-hosted runner required). Builds are attested with
 [`actions/attest-build-provenance`](https://github.com/actions/attest-build-provenance).
 
 ```shell
 gh attestation verify *.apk -R jqssun/android-helium-browser
 ```
 
-This repository ships the build scripts to compile on the latest Ubuntu (and likely other
-Linux distributions). The pipeline:
+### Runner requirement
+
+Chromium for Android needs hundreds of GB of disk and a large amount of RAM, far beyond the
+standard `ubuntu-latest` runner. The workflow therefore targets a **Larger Runner**
+(`ubuntu-24.04-32-core` → 32 vCPU / 128 GB RAM / 1200 GB SSD). Larger Runners require a
+**GitHub Team or GitHub Enterprise Cloud** plan.
+
+To enable it:
+
+1. In your organization, go to **Settings › Actions › Runners › New runner**.
+2. Pick the **Ubuntu / 32 vCPU / 128 GB** machine size and give it the label
+   `ubuntu-24.04-32-core` (or change the default in `.github/workflows/build.yml`).
+3. Ensure the repository (or its organization) is allowed to use that runner.
+
+The repository also still works on a self-hosted runner — just select `self-hosted` in the
+**Run workflow** `runner` input.
+
+### Pipeline
 
 1. Checks out submodules (`vanadium`, `helium`).
 2. Fetches the matching Chromium tag from `chromium.googlesource.com`.
@@ -122,11 +138,13 @@ Linux distributions). The pipeline:
 4. Builds `chrome_public_apk` for `arm` and `arm64`, plus an `arm64` App Bundle (`.aab`).
 5. Signs the APKs/AAB with the repo keystore and publishes a GitHub release.
 
-To build via CI, fork the repository and supply your `base64`-encoded `keystore.jks`
+### Secrets
+
+Fork the repository and supply your `base64`-encoded `keystore.jks`
 (`LOCAL_TEST_JKS`) and `local.properties` (`STORE_TEST_JKS`, containing `keyAlias`,
 `keyPassword`, `storePassword`) as **Repository secrets** under
 *Settings › Secrets and variables › Actions*. Then go to **Actions › Build › Run workflow**
-and choose the runner.
+and choose the runner label.
 
 Build artifacts:
 
